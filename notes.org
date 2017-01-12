@@ -1,0 +1,181 @@
+* Ghettoripper
+
+** Requirements
+   - Download spotify *lists*
+   - *Refresh* previously loaded lists without redownloading them
+     completely
+   - each list as a directory, but flat, not with folders like in
+     spotify internally, because they cannot be accessed.  folders can
+     be restructured, the dir-name can also be changed, and the
+     program works on whole lists / directories
+   - in the directories, the files are named like this:
+     01_-_Cari_Lekebusch_-_Farfalla.mp3
+
+     or similarly.  Core requirements: Index, to maintain original
+     ordering, and artist and title information to quickly identify a
+     track by its filename.
+
+   - The *ID3-Tags* are assigned from the spotify data.
+
+** Use Cases
+
+*** download new list
+    "ghettoripper rip spotify:user:1157117410:playlist:3tiMJESJTCDj0Yz4YY8BD0 [path/to/list]"
+
+    Should download the given list into the current directory.
+    Optionally a path can be given which will be used instead of the
+    current directory.
+
+*** update a previously downloaded list
+    "ghettorip refresh [path/to/list]"
+    
+    If the path is not given, the current directory is assumed.  There
+    needs to be a file that describes to which playlist the directory
+    is linked.  After the operation is finished, the tracks and the
+    ordering should be in sync with spotify again.
+
+*** Optional stuff
+    - make it possible to mark songs as ignored
+    - have a common store for tracks and just symlink them into
+      directories, allowing for different directory structures
+      (playlist vs. artist/release) and avoiding duplicate downloads
+    - allow to modify the associated youtube video of a song, if the
+      automatic detection didn't work 
+
+** Basic Implementation
+
+*** Initial Rip
+    - create target dir if it does not exist
+    - query spotify API and download the spotify list as a json data
+      structure and safe it to the directory.
+    - 
+
+
+spotify:track:6qLgGLeawKyhMFJ848XtYD
+
+
+* Ghettoripper v2
+
+** Requirements
+   - Have one directory with all the tracks, name of the file is
+     irrelevant, organization is done in the metadata of the files and
+     with external tools, or trough recreating structures with
+     symlinks to the files.
+     -> seperate organisation from the raw data.
+   - spotify lists should be added and removed
+   - one operation to sync, i.e. download tracks which were added to
+     the playlists, remove tracks which aren't in any playlist anymore
+   + an operation to create a directory structure with symlinks or
+     file copying which resembles playlists (optional)
+
+** Data structures
+
+*** Tables
+    - Playlists
+      - list-id: the spotify string id of the playlist
+      - list-name: the name of the list from spotify
+    - Playlist-Tracks
+      - list-id: the spotify string id of the playlist
+      - track-id: the spotify string id of the track
+    - Tracks
+      - track-id: the spotify string id of the track
+      - youtube-link: a link to a youtube video for the track, can be empty
+      - ignored-flag: a boolean, if this track is ignored while
+        downloading.  Useful if no link is available because the track
+        doesn't exist on youtube.
+      - deleted-flag: If the track isn't represented in any playlist.
+        The db entry should be kept, to safe the link information if
+        the track is added again.  This flag indicates that the track
+        shouldn't be downloaded.
+
+*** Files
+    /
+    /data.db
+    /tracks/
+    /tracks/6qLgGLeawKyhMFJ848XtYD.mp3
+    /tracks/65W8HICfApE8QoZepJrMZE.mp3
+
+** Commands
+   
+*** add-list <spotify-list-URI> [SQL update]
+    - add the list to the Playlists table, without the name, just the
+      string id given on the command line
+
+*** remove-list <spotify-list-URI> [SQL update]
+    - remove the List from the Playlists table
+    - for each entry in Playlist-Tracks:
+      - if playlist-id is not in Playlists anymore:
+        - remove the entry
+        - if track is not used somewhere else:
+          - in the Tracks table, set the deleted-flag to true
+
+*** sync-lists [SQL read, Spotify, SQL update]
+    - for each list:
+      - query spotify for playlist info
+      - update the playlist name
+      - update the Playlist-Tracks table:
+        - for each added track:
+          - add the track to the Tracks table
+            - if it is there already, set deleted-flag to false
+        - for each removed track:
+          - if track is not used somewhere else:
+            - in the Tracks table, set the deleted-flag to true
+
+*** infer-yt-links [SQL read, YouTube search, SQL update]
+    - for each track in Tracks:
+      - if ignored-flag is true: continue
+      - if deleted-flag is true: continue
+      - if track.youtube-link is empty:
+        - query spotify for song info
+        - use song info to find youtube-video that matches
+        - write the youtube-link into the db
+
+*** update-files [SQL read, youtube-dl, File System, Spotify]
+    - for each track in Tracks:
+      - if deleted-flag is true and file exists:
+        - delete file
+        - continue
+      - if ignored-flag is true:
+        - continue
+      - if youtube-link is not empty:
+        - download file
+        - add spotify ID3 tags
+
+*** OPTIONAL update ID3 tags
+    - for each track, look up to which lists it belongs and write the list names to the file comments
+      (useful for searching in Mixxx)
+
+*** update
+    sync-lists infer-yt-links update-files
+
+*** set-yt-link
+    
+*** set-ignored-flag
+
+*** update-ID3-tags
+    optionally only one file or all files
+
+** Interfacing / APIs
+
+*** Spotify
+    - query playlist name and contents
+    - query song info for ID3 tags
+
+*** YouTube
+    - search for song 
+
+*** youtube-dl
+    import python module and call it to download
+
+*** File System
+    eZ
+
+*** SQL Database
+    the three tables
+
+** Existing software
+
+*** Spotify-Downloader [https://github.com/Ritiek/Spotify-Downloader]
+    finds youtube link for song
+    downloads youtube video
+    adds ID3 tags
