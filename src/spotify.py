@@ -13,19 +13,14 @@ class SpotifyInterface:
         else:
             self.sp = spotipy.Spotify()
 
-    def get_playlist_name(self, playlist_uri):
-        user_uri = extract_userid_from_playlist_uri(playlist_uri)
-        playlist = self.sp.user_playlist(user_uri, playlist_uri)
-        return playlist['name']
-
-    def get_playlist_tracks(self, playlist_uri):
-        """returns a list of track_uri"""
+    def get_playlist_name_and_tracks(self, playlist_uri):
+        """returns (name, [track_uri, track_uri, ...])"""
         user_uri = extract_userid_from_playlist_uri(playlist_uri)
         playlist = self.sp.user_playlist(user_uri, playlist_uri)
         tracklist = []
         for item in playlist["tracks"]["items"]:
             tracklist.append(item["track"]["uri"])
-        return tracklist
+        return playlist["name"], tracklist
 
     # TODO can be extended for BPM, genre etc.
     def get_track_info(self, track_uri):

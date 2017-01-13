@@ -1,22 +1,43 @@
 import argparse
 import spotify
 import db
+import os
 
 
 def init(db_file, track_dir):
-    pass
+    database = db.Database(db_file)
+    database.init()
+    os.mkdirs(track_dir)
+    database.close()
 
 
 def add_playlist(db_file, playlist_uri):
-    pass
+    database = db.Database(db_file)
+    database.add_playlist(playlist_uri)
+    database.close()
 
 
 def remove_playlist(db_file, playlist_uri):
-    pass
+    database = db.Database(db_file)
+    database.remove_playlist(playlist_uri)
+    database.close()
 
 
 def sync(db_file, username):
-    pass
+    database = db.Database(db_file)
+    si = spotify.SpotifyInterface(username)
+    p_uris = database.get_playlists()
+    for p_uri in p_uris:
+        name, new_tracks = si.get_playlist_name_and_tracks(p_uri)
+        db.set_playlist_name(p_uri, name)
+        current_tracks = db.get_tracks(p_uri)
+        added_tracks = [t for t in new_tracks if t not in current_tracks]
+        deleted_tracks = [t for t in current_tracks if t not in new_tracks]
+        for t in added_tracks:
+            db.add_track(p_uri, t)
+        for t in deleted_tracks:
+            db.remove_track(p_uri, t)
+    database.close()
 
 
 def infer(db_file, username):
