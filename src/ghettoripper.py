@@ -2,12 +2,24 @@ import argparse
 import spotify
 import db
 import os
+import logging
+import youtube
+
+
+logger = logging.getLogger()
+handler = logging.StreamHandler()
+formatter = logging.Formatter(
+        '%(levelname)-8s %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
 
 
 def init(db_file, track_dir):
+    logger.info("Initializing Database to '%s'", db_file)
     database = db.Database(db_file)
     database.init()
-    os.mkdirs(track_dir)
+    os.makedirs(track_dir)
     database.close()
 
 
@@ -29,23 +41,44 @@ def sync(db_file, username):
     p_uris = database.get_playlists()
     for p_uri in p_uris:
         name, new_tracks = si.get_playlist_name_and_tracks(p_uri)
-        db.set_playlist_name(p_uri, name)
-        current_tracks = db.get_tracks(p_uri)
+        database.set_playlist_name(p_uri, name)
+        current_tracks = database.get_tracks(p_uri)
         added_tracks = [t for t in new_tracks if t not in current_tracks]
         deleted_tracks = [t for t in current_tracks if t not in new_tracks]
         for t in added_tracks:
-            db.add_track(p_uri, t)
+            database.add_track(p_uri, t)
         for t in deleted_tracks:
-            db.remove_track(p_uri, t)
+            database.remove_track(p_uri, t)
     database.close()
 
 
 def infer(db_file, username):
-    pass
+    database = db.Database(db_file)
+    si = spotify.SpotifyInterface(username)
+    t_uris = database.get_tracks_for_infer()
+    for t_uri in t_uris:
+        if t_uri.startswith('spotify:local'):
+            database.set_ignore_flag(t_uri, True)
+            continue
+        track_info = si.get_track_info(t_uri)
+        q_str = youtube.query_string_from_track_info(track_info)
+        yt_link = youtube.best_hit_for_query(q_str)
+        database.set_track_link(t_uri, yt_link)
+    database.close()
 
 
-def update_files(db_file, track_dir):
-    pass
+def update_files(db_file, track_dir, username):
+    database = db.Database(db_file)
+    t_uris = database.get_deleted_tracks()
+    si = spotify.SpotifyInterface(username)
+    for t_uri in t_uris:
+        os.remove(os.path.join(track_dir, t_uri + '.mp3'))
+    t_infos = database.get_tracks_for_download()
+    for t_uri, yt_link in t_infos:
+        path = os.path.join(track_dir, t_uri)
+        youtube.download_video(yt_link, path)
+        mp3_path = path + ".mp3"
+        si.write_track_info(t_uri, mp3_path)
 
 
 def main():
@@ -74,12 +107,13 @@ def main():
     p_update.add_argument("username", help="Your spotify username, required to read the data")
 
     args = parser.parse_args()
+    logger.debug("args: %s", args)
 
     db_path = "ghettoripper.db"
     track_dir = "tracks"
     cmd = args.subcommand
 
-    if cmd == 'ini':
+    if cmd == 'init':
         init(db_path, track_dir)
     elif cmd == 'add-list':
         add_playlist(db_path, args.uri)
@@ -90,7 +124,7 @@ def main():
     elif cmd == 'infer':
         infer(db_path, args.username)
     elif cmd == 'update-files':
-        update_files(db_path, track_dir)
+        update_files(db_path, track_dir, args.username)
     elif cmd == 'update':
         sync(db_path, args.username)
         infer(db_path, args.username)

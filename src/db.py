@@ -94,6 +94,12 @@ SET youtube_link = ?
 WHERE tracks.uri = ?
 """.strip()
 
+Q_SET_IGNORE_FLAG = """
+UPDATE tracks
+SET ignore_flag = ?
+WHERE tracks.uri = ?
+""".strip()
+
 Q_GET_DELETED_TRACKS = """
 SELECT uri FROM tracks
 WHERE tracks.deleted_flag = 1
@@ -209,6 +215,13 @@ class Database:
         """sets the youtube_link for the track"""
         c = self._conn.cursor()
         c.execute(Q_SET_TRACK_LINK, (youtube_link, track_uri))
+        c.close()
+        self._conn.commit()
+
+    def set_ignore_flag(self, track_uri, flag_val):
+        i_flag = 1 if flag_val else 0
+        c = self._conn.cursor()
+        c.execute(Q_SET_IGNORE_FLAG, (i_flag, track_uri))
         c.close()
         self._conn.commit()
 
