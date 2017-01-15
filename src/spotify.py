@@ -23,22 +23,12 @@ class SpotifyInterface:
             tracklist.append(item["track"]["uri"])
         return playlist["name"], tracklist
 
-    # TODO can be extended for BPM, genre etc.
-    def get_track_info(self, track_uri):
+    def get_track_query_string(self, track_uri):
         track = self.sp.track(track_uri)
-        info = {}
-        info['title'] = track['name']
         artists = track['artists'][0]['name']
         for artist in track['artists'][1:]:
             artists += "; " + artist['name']
-        info['artist'] = artists
-        info['album'] = track['album']['name']
-        album_artists = track['album']['artists'][0]['name']
-        for artist in track['album']['artists'][1:]:
-            album_artists += "; " + artist['name']
-        info['album_artist'] = album_artists
-        info['track_number'] = track['track_number']
-        return info
+        return artists + " " + track['name']
 
     def write_track_info(self, t_uri, mp3_file):
         track = self.sp.track(t_uri)

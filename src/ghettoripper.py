@@ -12,15 +12,7 @@ formatter = logging.Formatter(
         '%(levelname)-8s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
-
-
-def init(db_file, track_dir):
-    logger.info("Initializing Database to '%s'", db_file)
-    database = db.Database(db_file)
-    database.init()
-    os.makedirs(track_dir)
-    database.close()
+logger.setLevel(logging.INFO)
 
 
 def add_playlist(db_file, playlist_uri):
@@ -36,9 +28,11 @@ def remove_playlist(db_file, playlist_uri):
 
 
 def sync(db_file, username):
+    logger.info("Starting sync")
     database = db.Database(db_file)
     si = spotify.SpotifyInterface(username)
     p_uris = database.get_playlists()
+    logger.info("Found %s playlists for sync", len(p_uris))
     for p_uri in p_uris:
         name, new_tracks = si.get_playlist_name_and_tracks(p_uri)
         database.set_playlist_name(p_uri, name)
@@ -49,44 +43,85 @@ def sync(db_file, username):
             database.add_track(p_uri, t)
         for t in deleted_tracks:
             database.remove_track(p_uri, t)
+        logger.info("Playlist: '%s' (Tracks added: %s, deleted: %s)",
+                    name, len(added_tracks), len(deleted_tracks))
     database.close()
+    logger.info("Sync finished")
 
 
 def infer(db_file, username):
+    logger.info("Starting infer")
     database = db.Database(db_file)
     si = spotify.SpotifyInterface(username)
     t_uris = database.get_tracks_for_infer()
+    logger.info("Found %s tracks for infer", len(t_uris))
     for t_uri in t_uris:
         if t_uri.startswith('spotify:local'):
             database.set_ignore_flag(t_uri, True)
+            logger.info("Ignoring local track: %s", t_uri)
             continue
-        track_info = si.get_track_info(t_uri)
-        q_str = youtube.query_string_from_track_info(track_info)
-        yt_link = youtube.best_hit_for_query(q_str)
+        q_str = si.get_track_query_string(t_uri)
+        yt_link, yt_title = youtube.best_hit_for_query(q_str)
         database.set_track_link(t_uri, yt_link)
+        logger.info("Track query: '%s', result: '%s' (%s)",
+                    q_str, yt_link, yt_title)
     database.close()
+    logger.info("Infer finished")
 
 
 def update_files(db_file, track_dir, username):
+    logger.info("Updating files")
     database = db.Database(db_file)
     t_uris = database.get_deleted_tracks()
     si = spotify.SpotifyInterface(username)
     for t_uri in t_uris:
         os.remove(os.path.join(track_dir, t_uri + '.mp3'))
+    logger.info("Removed %s files", len(t_uris))
     t_infos = database.get_tracks_for_download()
-    for t_uri, yt_link in t_infos:
+    t_missing = [(t_uri, t_link) for (t_uri, t_link) in t_infos
+                 if not os.path.join(track_dir, t_uri + '.mp3')]
+    logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
+    for t_uri, yt_link in t_missing:
         path = os.path.join(track_dir, t_uri)
-        youtube.download_video(yt_link, path)
         mp3_path = path + ".mp3"
+        youtube.download_video(yt_link, path)
         si.write_track_info(t_uri, mp3_path)
+    logger.info("Files updated")
+
+
+def read_conf():
+    conf = {}
+    # access to os.environ might raise KeyError
+    conf['username'] = os.environ['GHETTORIPPER_USERNAME']
+    conf['basedir'] = os.environ['GHETTORIPPER_BASEDIR']
+    conf['tracksdir'] = os.path.join(conf['basedir'], 'tracks')
+    conf['playlistsdir'] = os.path.join(conf['basedir'], 'playlists')
+    conf['dbfile'] = os.path.join(conf['basedir'], 'ghettoripper.sqlite')
+    return conf
+
+
+def init(conf):
+    if not os.path.exists(conf['basedir']):
+        logger.info('Creating base directory: %s', conf['basedir'])
+        os.makedirs(conf['basedir'])
+    if not os.path.exists(conf['tracksdir']):
+        logger.info('Creating tracks directory: %s', conf['tracksdir'])
+        os.makedirs(conf['tracksdir'])
+    if not os.path.exists(conf['playlistsdir']):
+        logger.info('Creating playlists directory: %s', conf['playlistsdir'])
+        os.makedirs(conf['playlistsdir'])
+    if not os.path.exists(conf['dbfile']):
+        logger.info("Initializing database: %s", conf['dbfile'])
+        database = db.Database(conf['dbfile'])
+        database.init()
+        database.close()
+    # TODO it would be fancy if the spotipy cache file would be initialized here
 
 
 def main():
     parser = argparse.ArgumentParser(description="Spotify Ripper, ghetto style")
     subparsers = parser.add_subparsers(dest="subcommand",
                                        help="sub-command help")
-
-    p_init = subparsers.add_parser('init', help="Initialize database and directory structure")
 
     p_add_list = subparsers.add_parser('add-list', help="Add a playlist to the database")
     p_add_list.add_argument("uri", help="The URI of the playlist")
@@ -95,39 +130,37 @@ def main():
     p_remove_list.add_argument("uri", help="The URI of the playlist to remove")
 
     p_sync = subparsers.add_parser('sync', help="Synchronize tracklists and playlist names from spotify")
-    p_sync.add_argument("username", help="Your spotify username, required to read the data")
 
     p_infer = subparsers.add_parser('infer', help="Infer YouTube video links for the tracks")
-    p_infer.add_argument("username", help="Your spotify username, required to read the data")
 
     p_update_files = subparsers.add_parser('update-files', help="Download missing tracks and remove tracks that were deleted")
-    p_update_files.add_argument("username", help="Your spotify username, required to read the data")
 
     p_update = subparsers.add_parser('update', help="Syncs, infers links, updates files")
-    p_update.add_argument("username", help="Your spotify username, required to read the data")
 
     args = parser.parse_args()
     logger.debug("args: %s", args)
 
-    db_path = "ghettoripper.db"
-    track_dir = "tracks"
+    conf = read_conf()
+    username = conf['username']
+    db_path = conf['dbfile']
+    track_dir = conf['tracksdir']
+    init(conf)
+
     cmd = args.subcommand
 
-    if cmd == 'init':
-        init(db_path, track_dir)
-    elif cmd == 'add-list':
+    if cmd == 'add-list':
         add_playlist(db_path, args.uri)
     elif cmd == 'rm-list':
         remove_playlist(db_path, args.uri)
     elif cmd == 'sync':
-        sync(db_path, args.username)
+        sync(db_path, username)
     elif cmd == 'infer':
-        infer(db_path, args.username)
+        infer(db_path, username)
     elif cmd == 'update-files':
-        update_files(db_path, track_dir, args.username)
+        update_files(db_path, track_dir, username)
     elif cmd == 'update':
-        sync(db_path, args.username)
-        infer(db_path, args.username)
+        sync(db_path, username)
+        infer(db_path, username)
         update_files(db_path, track_dir)
 
 

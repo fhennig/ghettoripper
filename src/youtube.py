@@ -5,22 +5,7 @@ import logging
 import youtube_dl
 
 
-logger = logging.getLogger()
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-        '%(levelname)-8s %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
-log = logger
-
-
-def query_string_from_track_info(track_info):
-    s = ""
-    s += track_info['artist']
-    s += " "
-    s += track_info['title']
-    return s
+log = logging.getLogger()
 
 
 def best_hit_for_query(query_str):
@@ -36,7 +21,7 @@ def best_hit_for_query(query_str):
     del check
     full_link = "youtube.com" + first_result['href']
     log.debug("Found result: '%s' (%s)", first_result['title'], full_link)
-    return full_link
+    return full_link, first_result['title']
 
 
 def download_video(link, output_path):
@@ -44,6 +29,7 @@ def download_video(link, output_path):
     without the file extension!"""
     ydl_opts = {'format': 'bestaudio',
                 'outtmpl': output_path + '.%(ext)s',
+                'noplaylist': True,
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
@@ -54,7 +40,7 @@ def download_video(link, output_path):
 
 
 def test_best_hit():
-    link = best_hit_for_query("Cari Lekebusch Farfalla")
+    link, title = best_hit_for_query("Cari Lekebusch Farfalla")
     download_video(link, 'cari_test')
 
 
