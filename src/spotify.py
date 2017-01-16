@@ -21,7 +21,7 @@ class SpotifyInterface:
         tracklist = []
         for item in playlist["tracks"]["items"]:
             tracklist.append(item["track"]["uri"])
-        return playlist["name"], tracklist
+        return playlist["name"], playlist["snapshot_id"], tracklist
 
     def get_track_query_string(self, track_uri):
         track = self.sp.track(track_uri)

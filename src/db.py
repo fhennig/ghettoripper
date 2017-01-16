@@ -4,13 +4,15 @@ import sqlite3
 Q_INIT_PLAYLISTS_TABLE = """
 CREATE TABLE playlists
 (uri TEXT PRIMARY KEY,
- name TEXT)
+ name TEXT,
+ snapshot_id TEXT)
 """.strip()
 
 Q_INIT_PLAYLIST_TRACKS_TABLE = """
 CREATE TABLE playlisttracks
 (playlist_uri TEXT,
- track_uri TEXT)
+ track_uri TEXT,
+ track_index INTEGER)
 """.strip()
 
 Q_INIT_TRACKS_TABLE = """
@@ -22,8 +24,8 @@ CREATE TABLE tracks
 """.strip()
 
 Q_INSERT_PLAYLIST = """
-INSERT INTO playlists (uri, name)
-VALUES (?, ?)
+INSERT INTO playlists (uri, name, snapshot_id)
+VALUES (?, ?, ?)
 """.strip()
 
 Q_REMOVE_PLAYLIST_1 = """
@@ -31,12 +33,12 @@ DELETE FROM playlists
 WHERE uri = ?
 """.strip()
 
-Q_REMOVE_PLAYLIST_2 = """
+Q_REMOVE_PLAYLIST_TRACKS = """
 DELETE FROM playlisttracks
 WHERE playlist_uri = ?
 """.strip()
 
-Q_REMOVE_PLAYLIST_3 = """
+Q_MARK_DELETED_TRACKS = """
 UPDATE tracks
 SET deleted_flag = 1
 WHERE NOT EXISTS
@@ -48,20 +50,27 @@ Q_SELECT_PLAYLIST_URIS = """
 SELECT uri FROM playlists
 """.strip()
 
-Q_SET_PLAYLIST_NAME = """
+Q_GET_PLAYLIST_INFO = """
+SELECT name, snapshot_id
+FROM playlists
+WHERE uri = ?
+""".strip()
+
+Q_SET_PLAYLIST_INFO = """
 UPDATE playlists
-SET name = ?
+SET name = ?, snapshot_id = ?
 WHERE playlists.uri = ?
 """.strip()
 
-Q_GET_PLAYLIST_TRACKS = """
-SELECT track_uri FROM playlisttracks
-WHERE playlisttracks.playlist_uri = ?
-""".strip()
+# Q_GET_PLAYLIST_TRACKS = """
+# SELECT track_uri, track_index FROM playlisttracks
+# WHERE playlisttracks.playlist_uri = ?
+# ORDER BY playlisttracks.track_index ASC
+# """.strip()
 
 Q_ADD_PLAYLIST_TRACK = """
-INSERT INTO playlisttracks (playlist_uri, track_uri)
-VALUES (?, ?)
+INSERT INTO playlisttracks (playlist_uri, track_uri, track_index)
+VALUES (?, ?, ?)
 """.strip()
 
 Q_ADD_TRACK_OR_UPDATE = """
@@ -72,10 +81,10 @@ VALUES (?,
         0)
 """.strip()
 
-Q_REMOVE_PLAYLIST_TRACK = """
-DELETE FROM playlisttracks
-WHERE playlisttracks.playlist_uri = ? AND playlisttracks.track_uri = ?
-""".strip()
+# Q_REMOVE_PLAYLIST_TRACK = """
+# DELETE FROM playlisttracks
+# WHERE playlisttracks.playlist_uri = ? AND playlisttracks.track_uri = ?
+# """.strip()
 
 Q_MARK_TRACK_AS_DELETED = """
 UPDATE tracks
@@ -134,7 +143,7 @@ class Database:
     def add_playlist(self, playlist_uri):
         """adds the playlist_uri with an empty name"""
         c = self._conn.cursor()
-        c.execute(Q_INSERT_PLAYLIST, (playlist_uri, ""))
+        c.execute(Q_INSERT_PLAYLIST, (playlist_uri, "", ""))
         c.close()
         self._conn.commit()
 
@@ -146,8 +155,8 @@ class Database:
         that isn't in any playlist anymore after the playlist was deleted."""
         c = self._conn.cursor()
         c.execute(Q_REMOVE_PLAYLIST_1, (playlist_uri,))
-        c.execute(Q_REMOVE_PLAYLIST_2, (playlist_uri,))
-        c.execute(Q_REMOVE_PLAYLIST_3)
+        c.execute(Q_REMOVE_PLAYLIST_TRACKS, (playlist_uri,))
+        c.execute(Q_MARK_DELETED_TRACKS)
         c.close()
         self._conn.commit()
 
@@ -163,40 +172,64 @@ class Database:
         self._conn.commit()
         return uris
 
-    def set_playlist_name(self, playlist_uri, name):
-        """sets the playlist name"""
+    def get_playlist_info(self, playlist_uri):
+        """returns (name, snapshot_id)"""
         c = self._conn.cursor()
-        c.execute(Q_SET_PLAYLIST_NAME, (name, playlist_uri))
-        c.close()
-        self._conn.commit()
-
-    def get_tracks(self, playlist_uri):
-        """returns a list of track_uri of tracks which are in the playlist"""
-        c = self._conn.cursor()
-        c2 = c.execute(Q_GET_PLAYLIST_TRACKS, (playlist_uri,))
-        uris = [t[0] for t in c2.fetchall()]
+        c2 = c.execute(Q_GET_PLAYLIST_INFO, (playlist_uri,))
+        result = c2.fetchall()[0]
         c.close()
         c2.close()
-        self._conn.commit()
-        return uris
+        return result
 
-    def add_track(self, playlist_uri, track_uri):
+    def set_playlist_info(self, playlist_uri, name, snapshot_id):
+        """sets the playlist name"""
+        c = self._conn.cursor()
+        c.execute(Q_SET_PLAYLIST_INFO, (name, snapshot_id, playlist_uri))
+        c.close()
+        self._conn.commit()
+
+    def remove_playlist_tracks(self, playlist_uri):
+        """removes all playlist track entries"""
+        c = self._conn.cursor()
+        c.execute(Q_REMOVE_PLAYLIST_TRACKS, (playlist_uri,))
+        c.close()
+        self._conn.commit()
+
+#    def get_tracks(self, playlist_uri):
+#        """returns a list of track_uri of tracks which are in the playlist"""
+#        c = self._conn.cursor()
+#        c2 = c.execute(Q_GET_PLAYLIST_TRACKS, (playlist_uri,))
+#        uris = [t[0] for t in c2.fetchall()]
+#        c.close()
+#        c2.close()
+#        self._conn.commit()
+#        return uris
+
+    def add_track(self, playlist_uri, track_uri, track_index):
         """adds the track to the playlist and adds the track to the tracks
         table, respectively unsets the deleted-flag"""
         c = self._conn.cursor()
-        c.execute(Q_ADD_PLAYLIST_TRACK, (playlist_uri, track_uri))
+        c.execute(Q_ADD_PLAYLIST_TRACK, (playlist_uri, track_uri, track_index))
         c.execute(Q_ADD_TRACK_OR_UPDATE, (track_uri, track_uri, track_uri))
         c.close()
         self._conn.commit()
 
-    def remove_track(self, playlist_uri, track_uri):
-        """removes a track from the playlist and sets the deleted flag on the
-        track if it isn't in any other playlist"""
+    def mark_removed_tracks(self):
+        """marks every track that is not in any playlist anymore
+        with the deleted flag = 1"""
         c = self._conn.cursor()
-        c.execute(Q_REMOVE_PLAYLIST_TRACK, (playlist_uri, track_uri))
-        c.execute(Q_MARK_TRACK_AS_DELETED, (track_uri, ))
+        c.execute(Q_MARK_DELETED_TRACKS)
         c.close()
         self._conn.commit()
+
+#    def remove_track(self, playlist_uri, track_uri):
+#        """removes a track from the playlist and sets the deleted flag on the
+#        track if it isn't in any other playlist"""
+#        c = self._conn.cursor()
+#        c.execute(Q_REMOVE_PLAYLIST_TRACK, (playlist_uri, track_uri))
+#        c.execute(Q_MARK_TRACK_AS_DELETED, (track_uri, ))
+#        c.close()
+#        self._conn.commit()
 
 # infer youtube links
 

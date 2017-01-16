@@ -34,17 +34,17 @@ def sync(db_file, username):
     p_uris = database.get_playlists()
     logger.info("Found %s playlists for sync", len(p_uris))
     for p_uri in p_uris:
-        name, new_tracks = si.get_playlist_name_and_tracks(p_uri)
-        database.set_playlist_name(p_uri, name)
-        current_tracks = database.get_tracks(p_uri)
-        added_tracks = [t for t in new_tracks if t not in current_tracks]
-        deleted_tracks = [t for t in current_tracks if t not in new_tracks]
-        for t in added_tracks:
-            database.add_track(p_uri, t)
-        for t in deleted_tracks:
-            database.remove_track(p_uri, t)
-        logger.info("Playlist: '%s' (Tracks added: %s, deleted: %s)",
-                    name, len(added_tracks), len(deleted_tracks))
+        name, snapshot_id, new_tracks = si.get_playlist_name_and_tracks(p_uri)
+        old_name, old_snapshot_id = database.get_playlist_info(p_uri)
+        if snapshot_id == old_snapshot_id:
+            logger.info("Playlist '%s' unchanged", name)
+            continue
+        database.set_playlist_info(p_uri, name, snapshot_id)
+        database.remove_playlist_tracks(p_uri)
+        for i, t in enumerate(new_tracks):
+            database.add_track(p_uri, t, i + 1)
+        logger.info("Playlist: '%s' updated", name)
+    database.mark_removed_tracks()
     database.close()
     logger.info("Sync finished")
 
@@ -79,7 +79,9 @@ def update_files(db_file, track_dir, username):
     logger.info("Removed %s files", len(t_uris))
     t_infos = database.get_tracks_for_download()
     t_missing = [(t_uri, t_link) for (t_uri, t_link) in t_infos
-                 if not os.path.join(track_dir, t_uri + '.mp3')]
+                 if not os.path.exists(os.path.join(track_dir, t_uri + '.mp3'))]
+    logger.debug("t_infos: %s", t_infos)
+    logger.debug("track_dir: %s", track_dir)
     logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
     for t_uri, yt_link in t_missing:
         path = os.path.join(track_dir, t_uri)
