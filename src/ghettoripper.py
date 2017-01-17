@@ -12,7 +12,7 @@ formatter = logging.Formatter(
         '%(levelname)-8s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 def add_playlist(db_file, playlist_uri):
@@ -61,10 +61,15 @@ def infer(db_file, username):
             logger.info("Ignoring local track: %s", t_uri)
             continue
         q_str = si.get_track_query_string(t_uri)
-        yt_link, yt_title = youtube.best_hit_for_query(q_str)
+        logger.info("Track query:  '%s' (%s)", q_str, t_uri)
+        try:
+            yt_link, yt_title = youtube.best_hit_for_query(q_str)
+        except IndexError:
+            database.set_ignore_flag(t_uri, True)
+            logger.info("Ignoring track, no results found")
+            continue
         database.set_track_link(t_uri, yt_link)
-        logger.info("Track query: '%s', result: '%s' (%s)",
-                    q_str, yt_link, yt_title)
+        logger.info("Track result: '%s' (%s)", yt_title, yt_link)
     database.close()
     logger.info("Infer finished")
 
@@ -89,6 +94,40 @@ def update_files(db_file, track_dir, username):
         youtube.download_video(yt_link, path)
         si.write_track_info(t_uri, mp3_path)
     logger.info("Files updated")
+
+
+def set_link(db_file, t_uri, yt_link):
+    database = db.Database(db_file)
+    database.set_track_link(t_uri, yt_link)
+    database.close()
+
+
+def ignore_tracks(db_file, t_uris):
+    database = db.Database(db_file)
+    for t_uri in t_uris:
+        database.set_ignore_flag(t_uri, True)
+    logger.info("Ignored %s tracks", len(t_uris))
+    database.close()
+
+
+def unignore_tracks(db_file, t_uris):
+    database = db.Database(db_file)
+    for t_uri in t_uris:
+        database.set_ignore_flag(t_uri, False)
+    logger.info("Unignored %s tracks", len(t_uris))
+    database.close()
+
+
+def delete_ignored_tracks(db_file, tracks_dir):
+    database = db.Database(db_file)
+    t_uris = database.get_ignored_tracks()
+    t_paths = [os.path.join(tracks_dir, t_uri + ".mp3") for t_uri in t_uris]
+    to_delete = [p for p in t_paths if os.path.exists(p)]
+    logger.info("Ignored tracks: %s, to delete: %s", len(t_paths), len(to_delete))
+    for t_p in to_delete:
+        os.remove(t_p)
+    database.close()
+    logger.info("Removed tracks.")
 
 
 def read_conf():
@@ -138,6 +177,14 @@ def main():
     p_update_files = subparsers.add_parser('update-files', help="Download missing tracks and remove tracks that were deleted")
 
     p_update = subparsers.add_parser('update', help="Syncs, infers links, updates files")
+    
+    p_ignore = subparsers.add_parser('ignore', help="Ignore the given track uris")
+    p_ignore.add_argument('uri', nargs='+', help="The track uris to ignore")
+
+    p_unignore = subparsers.add_parser('unignore', help="Unignore the given track uris")
+    p_unignore.add_argument('uri', nargs='+', help="The track uris to unignore")
+
+    p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
 
     args = parser.parse_args()
     logger.debug("args: %s", args)
@@ -163,7 +210,13 @@ def main():
     elif cmd == 'update':
         sync(db_path, username)
         infer(db_path, username)
-        update_files(db_path, track_dir)
+        update_files(db_path, track_dir, username)
+    elif cmd == 'ignore':
+        ignore_tracks(db_path, args.uri)
+    elif cmd == 'unignore':
+        unignore_tracks(db_path, args.uri)
+    elif cmd == 'delignored':
+        delete_ignored_tracks(db_path, track_dir)
 
 
 if __name__ == "__main__":

@@ -121,6 +121,11 @@ WHERE tracks.youtube_link != ""
   AND tracks.deleted_flag = 0
 """.strip()
 
+Q_GET_IGNORED_TRACKS = """
+SELECT uri FROM tracks
+WHERE tracks.ignore_flag = 1
+""".strip()
+
 
 class Database:
     """each function is its own transaction"""
@@ -277,6 +282,19 @@ class Database:
         c = self._conn.cursor()
         c2 = c.execute(Q_GET_TRACKS_FOR_DOWNLOAD)
         uris = [(t[0], t[1]) for t in c2.fetchall()]
+        c.close()
+        c2.close()
+        self._conn.commit()
+        return uris
+
+# ignore management
+
+    def get_ignored_tracks(self):
+        """returns all tracks that carry the deleted-flag.  list of
+        track_uri"""
+        c = self._conn.cursor()
+        c2 = c.execute(Q_GET_IGNORED_TRACKS)
+        uris = [t[0] for t in c2.fetchall()]
         c.close()
         c2.close()
         self._conn.commit()
