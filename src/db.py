@@ -62,11 +62,11 @@ SET name = ?, snapshot_id = ?
 WHERE playlists.uri = ?
 """.strip()
 
-# Q_GET_PLAYLIST_TRACKS = """
-# SELECT track_uri, track_index FROM playlisttracks
-# WHERE playlisttracks.playlist_uri = ?
-# ORDER BY playlisttracks.track_index ASC
-# """.strip()
+Q_GET_PLAYLIST_TRACKS = """
+SELECT track_uri, track_index FROM playlisttracks
+WHERE playlisttracks.playlist_uri = ?
+ORDER BY playlisttracks.track_index ASC
+""".strip()
 
 Q_ADD_PLAYLIST_TRACK = """
 INSERT INTO playlisttracks (playlist_uri, track_uri, track_index)
@@ -200,15 +200,15 @@ class Database:
         c.close()
         self._conn.commit()
 
-#    def get_tracks(self, playlist_uri):
-#        """returns a list of track_uri of tracks which are in the playlist"""
-#        c = self._conn.cursor()
-#        c2 = c.execute(Q_GET_PLAYLIST_TRACKS, (playlist_uri,))
-#        uris = [t[0] for t in c2.fetchall()]
-#        c.close()
-#        c2.close()
-#        self._conn.commit()
-#        return uris
+    def get_tracks(self, playlist_uri):
+        """returns a list of track_uri of tracks which are in the playlist"""
+        c = self._conn.cursor()
+        c2 = c.execute(Q_GET_PLAYLIST_TRACKS, (playlist_uri,))
+        uris = [t[0] for t in c2.fetchall()]
+        c.close()
+        c2.close()
+        self._conn.commit()
+        return uris
 
     def add_track(self, playlist_uri, track_uri, track_index):
         """adds the track to the playlist and adds the track to the tracks

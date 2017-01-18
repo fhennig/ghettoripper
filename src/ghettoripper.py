@@ -4,6 +4,7 @@ import db
 import os
 import logging
 import youtube
+import string
 
 
 logger = logging.getLogger()
@@ -13,6 +14,14 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
+
+
+def valid_filename(s):
+    valid_chars = "-_.()/ %s%s" % (string.ascii_letters, string.digits)
+    filename = ''.join(c for c in s if c in valid_chars)
+    filename = filename.replace(' ', '_')
+    filename = filename.replace('/', '-')
+    return filename
 
 
 def add_playlist(db_file, playlist_uri):
@@ -130,13 +139,29 @@ def delete_ignored_tracks(db_file, tracks_dir):
     logger.info("Removed tracks.")
 
 
+def generate_playlist_files(db_file, tracks_dir, playlist_dir):
+    """use_uris: if the playlist uris should be used for the name"""
+    database = db.Database(db_file)
+    p_uris = database.get_playlists()
+    logger.info("%s playlists", len(p_uris))
+    for p_uri in p_uris:
+        t_uris = database.get_tracks(p_uri)
+        name, _ = database.get_playlist_info(p_uri)
+        filename = valid_filename(name) + ".m3u"
+        logger.info("writing playlist %s (%s)", p_uri, filename)
+        with open(os.path.join(playlist_dir, filename), "w") as f:
+            for t_uri in t_uris:
+                f.write("../tracks/%s.mp3\n" % (t_uri))
+    database.close()
+
+
 def read_conf():
     conf = {}
     # access to os.environ might raise KeyError
     conf['username'] = os.environ['GHETTORIPPER_USERNAME']
     conf['basedir'] = os.environ['GHETTORIPPER_BASEDIR']
     conf['tracksdir'] = os.path.join(conf['basedir'], 'tracks')
-    conf['playlistsdir'] = os.path.join(conf['basedir'], 'playlists')
+    conf['listsdir'] = os.path.join(conf['basedir'], 'playlists')
     conf['dbfile'] = os.path.join(conf['basedir'], 'ghettoripper.sqlite')
     return conf
 
@@ -148,9 +173,9 @@ def init(conf):
     if not os.path.exists(conf['tracksdir']):
         logger.info('Creating tracks directory: %s', conf['tracksdir'])
         os.makedirs(conf['tracksdir'])
-    if not os.path.exists(conf['playlistsdir']):
-        logger.info('Creating playlists directory: %s', conf['playlistsdir'])
-        os.makedirs(conf['playlistsdir'])
+    if not os.path.exists(conf['listsdir']):
+        logger.info('Creating playlists directory: %s', conf['listsdir'])
+        os.makedirs(conf['listsdir'])
     if not os.path.exists(conf['dbfile']):
         logger.info("Initializing database: %s", conf['dbfile'])
         database = db.Database(conf['dbfile'])
@@ -186,6 +211,8 @@ def main():
 
     p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
 
+    p_genlists = subparsers.add_parser('genlists', help="renerate playlistfiles")
+
     args = parser.parse_args()
     logger.debug("args: %s", args)
 
@@ -193,6 +220,7 @@ def main():
     username = conf['username']
     db_path = conf['dbfile']
     track_dir = conf['tracksdir']
+    playlists_dir = conf['listsdir']
     init(conf)
 
     cmd = args.subcommand
@@ -217,6 +245,8 @@ def main():
         unignore_tracks(db_path, args.uri)
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
+    elif cmd == 'genlists':
+        generate_playlist_files(db_path, track_dir, playlists_dir)
 
 
 if __name__ == "__main__":
