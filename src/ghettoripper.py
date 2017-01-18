@@ -5,6 +5,7 @@ import os
 import logging
 import youtube
 import string
+import re
 
 
 logger = logging.getLogger()
@@ -13,7 +14,7 @@ formatter = logging.Formatter(
         '%(levelname)-8s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 def valid_filename(s):
@@ -22,6 +23,10 @@ def valid_filename(s):
     filename = filename.replace(' ', '_')
     filename = filename.replace('/', '-')
     return filename
+
+
+def t_id(t_uri):
+    return re.sub('spotify:track:', '', t_uri)
 
 
 def add_playlist(db_file, playlist_uri):
@@ -89,16 +94,16 @@ def update_files(db_file, track_dir, username):
     t_uris = database.get_deleted_tracks()
     si = spotify.SpotifyInterface(username)
     for t_uri in t_uris:
-        os.remove(os.path.join(track_dir, t_uri + '.mp3'))
+        os.remove(os.path.join(track_dir, t_id(t_uri) + '.mp3'))
     logger.info("Removed %s files", len(t_uris))
     t_infos = database.get_tracks_for_download()
     t_missing = [(t_uri, t_link) for (t_uri, t_link) in t_infos
-                 if not os.path.exists(os.path.join(track_dir, t_uri + '.mp3'))]
+                 if not os.path.exists(os.path.join(track_dir, t_id(t_uri) + '.mp3'))]
     logger.debug("t_infos: %s", t_infos)
     logger.debug("track_dir: %s", track_dir)
     logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
     for t_uri, yt_link in t_missing:
-        path = os.path.join(track_dir, t_uri)
+        path = os.path.join(track_dir, t_id(t_uri))
         mp3_path = path + ".mp3"
         youtube.download_video(yt_link, path)
         si.write_track_info(t_uri, mp3_path)
@@ -130,7 +135,7 @@ def unignore_tracks(db_file, t_uris):
 def delete_ignored_tracks(db_file, tracks_dir):
     database = db.Database(db_file)
     t_uris = database.get_ignored_tracks()
-    t_paths = [os.path.join(tracks_dir, t_uri + ".mp3") for t_uri in t_uris]
+    t_paths = [os.path.join(tracks_dir, t_id(t_uri) + ".mp3") for t_uri in t_uris]
     to_delete = [p for p in t_paths if os.path.exists(p)]
     logger.info("Ignored tracks: %s, to delete: %s", len(t_paths), len(to_delete))
     for t_p in to_delete:
@@ -153,7 +158,7 @@ def generate_playlist_files(db_file, tracks_dir, playlist_dir):
         filename = os.path.join(playlist_dir, filename)
         with open(filename, "w") as f:
             for t_uri in t_uris:
-                f.write("../tracks/%s.mp3\n" % (t_uri))
+                f.write("../tracks/%s.mp3\n" % (t_id(t_uri)))
             created_files.append(filename)
     for f in os.listdir(playlist_dir):  # remove playlist files with old names
         f = os.path.join(playlist_dir, f)
