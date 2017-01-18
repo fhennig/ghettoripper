@@ -207,9 +207,11 @@ def main():
 
     p_infer = subparsers.add_parser('infer', help="Infer YouTube video links for the tracks")
 
-    p_update_files = subparsers.add_parser('update-files', help="Download missing tracks and remove tracks that were deleted")
+    p_update_files = subparsers.add_parser('update-tracks', help="Download missing tracks and remove tracks that were deleted")
 
-    p_update = subparsers.add_parser('update', help="Syncs, infers links, updates files")
+    p_genlists = subparsers.add_parser('update-lists', help="(Re)generate all playlist files")
+
+    p_update = subparsers.add_parser('update', help="shortcut for: sync, infer, update-tracks, update-lists")
     
     p_ignore = subparsers.add_parser('ignore', help="Ignore the given track uris")
     p_ignore.add_argument('uri', nargs='+', help="The track uris to ignore")
@@ -218,8 +220,6 @@ def main():
     p_unignore.add_argument('uri', nargs='+', help="The track uris to unignore")
 
     p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
-
-    p_genlists = subparsers.add_parser('genlists', help="renerate playlistfiles")
 
     args = parser.parse_args()
     logger.debug("args: %s", args)
@@ -241,20 +241,21 @@ def main():
         sync(db_path, username)
     elif cmd == 'infer':
         infer(db_path, username)
-    elif cmd == 'update-files':
+    elif cmd == 'update-tracks':
         update_files(db_path, track_dir, username)
+    elif cmd == 'update-lists':
+        generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'update':
         sync(db_path, username)
         infer(db_path, username)
         update_files(db_path, track_dir, username)
+        generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'ignore':
         ignore_tracks(db_path, args.uri)
     elif cmd == 'unignore':
         unignore_tracks(db_path, args.uri)
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
-    elif cmd == 'genlists':
-        generate_playlist_files(db_path, track_dir, playlists_dir)
 
 
 if __name__ == "__main__":
