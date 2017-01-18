@@ -144,14 +144,22 @@ def generate_playlist_files(db_file, tracks_dir, playlist_dir):
     database = db.Database(db_file)
     p_uris = database.get_playlists()
     logger.info("%s playlists", len(p_uris))
+    created_files = []
     for p_uri in p_uris:
         t_uris = database.get_tracks(p_uri)
         name, _ = database.get_playlist_info(p_uri)
         filename = valid_filename(name) + ".m3u"
         logger.info("writing playlist %s (%s)", p_uri, filename)
-        with open(os.path.join(playlist_dir, filename), "w") as f:
+        filename = os.path.join(playlist_dir, filename)
+        with open(filename, "w") as f:
             for t_uri in t_uris:
                 f.write("../tracks/%s.mp3\n" % (t_uri))
+            created_files.append(filename)
+    for f in os.listdir(playlist_dir):  # remove playlist files with old names
+        f = os.path.join(playlist_dir, f)
+        if f.endswith(".m3u") and os.path.isfile(f) and f not in created_files:
+            logger.info("removing old file %s", f)
+            os.remove(f)
     database.close()
 
 
