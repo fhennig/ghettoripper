@@ -15,6 +15,7 @@ Configuration is done by setting environment variables.
 ## Usage
 
 - Call 'add-list <playlist URI>' for each playlist you want to download.
+  (A playlist URI looks like this: spotify:user:1121742695:playlist:0snhUokcY72SSfwfY6YlKu)
 - Call 'update' 
 - Enjoy files!
 
@@ -51,6 +52,14 @@ To download tracks which were added to the lists you downloaded, simply call 'up
     │   ├── Minimal_Techno_-_Tech_House.m3u
     │   └── Techstep.m3u
     └── tracks
-        ├── spotify:track:01whzdYiUQD9aK9TbX7EbZ.mp3
-        ├── spotify:track:02nwohaKLZbtec9jG6V7lc.mp3
+        ├── 01whzdYiUQD9aK9TbX7EbZ.mp3
+        ├── 02nwohaKLZbtec9jG6V7lc.mp3
         ├── ...
+
+## Related software
+
+- Spotify Downloader (https://github.com/Ritiek/Spotify-Downloader):
+  Can download single spotify tracks identified by their uri, uses
+  youtube to find the file and download it, also adds ID3 tags.
+- youtube-dl (https://github.com/rg3/youtube-dl):
+  For downloading youtube videos, great software.
