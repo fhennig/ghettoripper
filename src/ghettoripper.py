@@ -151,7 +151,7 @@ def generate_playlist_files(db_file, tracks_dir, playlist_dir):
     logger.info("%s playlists", len(p_uris))
     created_files = []
     for p_uri in p_uris:
-        t_uris = database.get_tracks(p_uri)
+        t_uris = database.get_tracks(p_uri)  # does not contain ignored tracks
         name, _ = database.get_playlist_info(p_uri)
         filename = valid_filename(name) + ".m3u"
         logger.info("writing playlist %s (%s)", p_uri, filename)
