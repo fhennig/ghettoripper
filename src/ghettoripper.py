@@ -6,6 +6,8 @@ import logging
 import youtube
 import string
 import re
+import shutil
+import fileio
 
 
 logger = logging.getLogger()
@@ -27,6 +29,15 @@ def valid_filename(s):
 
 def t_id(t_uri):
     return re.sub('spotify:track:', '', t_uri)
+
+
+def list_lists(db_file):
+    database = db.Database(db_file)
+    p_uris = database.get_playlists()
+    for p_uri in p_uris:
+        name, _ = database.get_playlist_info(p_uri)
+        print("%s '%s'" % (p_uri, name))
+    database.close()
 
 
 def add_playlist(db_file, playlist_uri):
@@ -168,6 +179,25 @@ def generate_playlist_files(db_file, tracks_dir, playlist_dir):
     database.close()
 
 
+def export_list(db_file, filemanager, list_uri, out_dir):
+    database = db.Database(db_file)
+    list_name, _ = database.get_playlist_info(list_uri)
+    list_dir_name = valid_filename(list_name)
+    list_dir = os.path.join(out_dir, list_dir_name)
+    os.makedirs(list_dir)
+    t_uris = database.get_tracks(list_uri)
+    logger.info("Copying %s tracks from list '%s' to directory '%s'",
+                len(t_uris), list_name, list_dir)
+    for t_uri in t_uris:
+        if filemanager.track_exists(t_uri):
+            t_path = filemanager.track_path(t_uri)
+            shutil.copy(t_path, list_dir)
+        else:
+            logger.info("Track missing: %s", t_uri)
+    database.close()
+    logger.info("Finished.")
+
+
 def read_conf():
     conf = {}
     # access to os.environ might raise KeyError
@@ -202,6 +232,8 @@ def main():
     subparsers = parser.add_subparsers(dest="subcommand",
                                        help="sub-command help")
 
+    p_list_lists = subparsers.add_parser('lists', help="List the playlists that are currently in the database")
+    
     p_add_list = subparsers.add_parser('add-list', help="Add a playlist to the database")
     p_add_list.add_argument("uri", help="The URI of the playlist")
 
@@ -226,6 +258,10 @@ def main():
 
     p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
 
+    p_export = subparsers.add_parser('export', help="Copy tracks from a list into a new directory")
+    p_export.add_argument('list_uri', help="The URI of the Playlist to export")
+    p_export.add_argument('out_dir', help="The directory where a new directory with the playlist name will be created.")
+
     args = parser.parse_args()
     logger.debug("args: %s", args)
 
@@ -238,7 +274,9 @@ def main():
 
     cmd = args.subcommand
 
-    if cmd == 'add-list':
+    if cmd == 'lists':
+        list_lists(db_path)
+    elif cmd == 'add-list':
         add_playlist(db_path, args.uri)
     elif cmd == 'rm-list':
         remove_playlist(db_path, args.uri)
@@ -261,6 +299,9 @@ def main():
         unignore_tracks(db_path, args.uri)
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
+    elif cmd == 'export':
+        export_list(db_path, fileio.FileManager(track_dir),
+                    args.list_uri, args.out_dir)
 
 
 if __name__ == "__main__":
