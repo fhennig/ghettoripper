@@ -40,10 +40,17 @@ def list_lists(db_file):
     database.close()
 
 
-def add_playlist(db_file, playlist_uri):
+def add_playlist(db_file, username, p_uri):
     database = db.Database(db_file)
-    database.add_playlist(playlist_uri)
+    # TODO check if list exists already
+    database.add_playlist(p_uri)
+    si = spotify.SpotifyInterface(username)
+    name, snapshot_id, new_tracks = si.get_playlist_name_and_tracks(p_uri)
+    database.set_playlist_info(p_uri, name, snapshot_id)
+    for i, t in enumerate(new_tracks):
+        database.add_track(p_uri, t, i + 1)
     database.close()
+    logger.info("Added list '%s' with %s tracks", name, len(new_tracks))
 
 
 def remove_playlist(db_file, playlist_uri):
@@ -277,7 +284,7 @@ def main():
     if cmd == 'lists':
         list_lists(db_path)
     elif cmd == 'add-list':
-        add_playlist(db_path, args.uri)
+        add_playlist(db_path, username, args.uri)
     elif cmd == 'rm-list':
         remove_playlist(db_path, args.uri)
     elif cmd == 'sync':
