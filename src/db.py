@@ -101,7 +101,8 @@ WHERE youtube_link = "" AND ignore_flag = 0 AND deleted_flag = 0
 
 Q_SET_TRACK_LINK = """
 UPDATE tracks
-SET youtube_link = ?
+SET youtube_link = ?,
+    ignore_flag = 0
 WHERE tracks.uri = ?
 """.strip()
 

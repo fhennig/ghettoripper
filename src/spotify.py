@@ -48,4 +48,4 @@ class SpotifyInterface:
 
 
 def extract_userid_from_playlist_uri(playlist_uri):
-    return re.match("spotify:user:([0-9]*):", playlist_uri).groups()[0]
+    return re.match("spotify:user:([^:]*):", playlist_uri).groups()[0]

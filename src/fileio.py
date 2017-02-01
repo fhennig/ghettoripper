@@ -16,3 +16,7 @@ class FileManager:
 
     def track_exists(self, track_uri):
         return os.path.exists(self.track_path(track_uri))
+
+    def remove_track(self, t_uri):
+        if self.track_exists(t_uri):
+            os.remove(self.track_path(t_uri))

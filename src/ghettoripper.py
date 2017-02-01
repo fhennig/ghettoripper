@@ -88,12 +88,13 @@ def infer(db_file, username):
     t_uris = database.get_tracks_for_infer()
     logger.info("Found %s tracks for infer", len(t_uris))
     for t_uri in t_uris:
+        logger.info("Infering track: '%s'", t_uri)
         if t_uri.startswith('spotify:local'):
             database.set_ignore_flag(t_uri, True)
-            logger.info("Ignoring local track: %s", t_uri)
+            logger.info("Local track; ignoring.")
             continue
         q_str = si.get_track_query_string(t_uri)
-        logger.info("Track query:  '%s' (%s)", q_str, t_uri)
+        logger.info("Track query:  '%s'", q_str)
         try:
             yt_link, yt_title = youtube.best_hit_for_query(q_str)
         except IndexError:
@@ -128,10 +129,15 @@ def update_files(db_file, track_dir, username):
     logger.info("Files updated")
 
 
-def set_link(db_file, t_uri, yt_link):
+def set_link(db_file, filemanager, t_uri, yt_link):
     database = db.Database(db_file)
     database.set_track_link(t_uri, yt_link)
+    logger.info("Link set")
+    if filemanager.track_exists(t_uri):
+        filemanager.remove_track(t_uri)
+        logger.info("Removing stale track file")
     database.close()
+    logger.info("Done")
 
 
 def ignore_tracks(db_file, t_uris):
@@ -241,7 +247,7 @@ def main():
 
     p_list_lists = subparsers.add_parser('lists', help="List the playlists that are currently in the database")
     
-    p_add_list = subparsers.add_parser('add-list', help="Add a playlist to the database")
+    p_add_list = subparsers.add_parser('add-list', help="Add a playlist to the database and fetches the playlist name and tracklist from spotify.")
     p_add_list.add_argument("uri", help="The URI of the playlist")
 
     p_remove_list = subparsers.add_parser('rm-list', help="Remove a playlist from the database")
@@ -255,7 +261,7 @@ def main():
 
     p_genlists = subparsers.add_parser('update-lists', help="(Re)generate all playlist files")
 
-    p_update = subparsers.add_parser('update', help="shortcut for: sync, infer, update-tracks, update-lists")
+    p_update = subparsers.add_parser('update', help="shortcut for update-tracks and update-lists")
     
     p_ignore = subparsers.add_parser('ignore', help="Ignore the given track uris")
     p_ignore.add_argument('uri', nargs='+', help="The track uris to ignore")
@@ -264,6 +270,10 @@ def main():
     p_unignore.add_argument('uri', nargs='+', help="The track uris to unignore")
 
     p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
+
+    p_set_link = subparsers.add_parser('set-link', help="Set the youtube link for a track.  Unsets the ignore flag.")
+    p_set_link.add_argument('track_uri', help="The URI of the track")
+    p_set_link.add_argument('yt_link', help="The YouTube link")
 
     p_export = subparsers.add_parser('export', help="Copy tracks from a list into a new directory")
     p_export.add_argument('list_uri', help="The URI of the Playlist to export")
@@ -296,8 +306,6 @@ def main():
     elif cmd == 'update-lists':
         generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'update':
-        sync(db_path, username)
-        infer(db_path, username)
         update_files(db_path, track_dir, username)
         generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'ignore':
@@ -306,6 +314,8 @@ def main():
         unignore_tracks(db_path, args.uri)
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
+    elif cmd == 'set-link':
+        set_link(db_path, args.track_uri, args.yt_link)
     elif cmd == 'export':
         export_list(db_path, fileio.FileManager(track_dir),
                     args.list_uri, args.out_dir)
