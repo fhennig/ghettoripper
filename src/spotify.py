@@ -1,7 +1,7 @@
 import spotipy
 import spotipy.util as util
 import re
-import stagger
+import track
 
 
 class SpotifyInterface:
@@ -30,21 +30,26 @@ class SpotifyInterface:
             artists += "; " + artist['name']
         return artists + " " + track['name']
 
-    def write_track_info(self, t_uri, mp3_file):
-        track = self.sp.track(t_uri)
-        tag = stagger.read_tag(mp3_file)
-        tag.title = track['name']
-        artists = track['artists'][0]['name']
-        for artist in track['artists'][1:]:
-            artists += "; " + artist['name']
-        tag.artist = artists
-        tag.album = track['album']['name']
-        album_artists = track['album']['artists'][0]['name']
-        for artist in track['album']['artists'][1:]:
-            album_artists += "; " + artist['name']
-        tag.album_artist = album_artists
-        tag.track = track['track_number']
-        tag.write()
+    def get_track_info(self, t_uris):
+        """reads multiple tracks into track objects"""
+        tracks = self.sp.tracks(t_uris)["tracks"]
+        result = []
+        for t in tracks:
+            tr = track.Track(t["uri"])
+            tr.title = t["name"]
+            artists = t['artists'][0]['name']
+            for artist in t['artists'][1:]:
+                artists += "; " + artist['name']
+            tr.artist = artists
+            tr.album = t['album']['name']
+            album_artists = t['album']['artists'][0]['name']
+            for artist in t['album']['artists'][1:]:
+                album_artists += "; " + artist['name']
+            tr.album_artist = album_artists
+            tr.track_number = tf['track_number']
+            result.append(tr)
+        return result
+
 
 
 def extract_userid_from_playlist_uri(playlist_uri):

@@ -1,5 +1,7 @@
 import os
 import re
+import stagger
+import track as tr
 
 
 class FileManager:
@@ -20,3 +22,12 @@ class FileManager:
     def remove_track(self, t_uri):
         if self.track_exists(t_uri):
             os.remove(self.track_path(t_uri))
+
+    def write_track_info(self, track):
+        tag = stagger.read_tag(self.track_path(track.uri))
+        tag.title = track.title
+        tag.artist = track.artist
+        tag.album = track.album
+        tag.album_artist = track.album_artist
+        tag.track = track.track_number
+        tag.write()

@@ -88,6 +88,7 @@ VALUES (?,
 # WHERE playlisttracks.playlist_uri = ? AND playlisttracks.track_uri = ?
 # """.strip()
 
+# unused ...
 Q_MARK_TRACK_AS_DELETED = """
 UPDATE tracks
 set deleted_flag = 1

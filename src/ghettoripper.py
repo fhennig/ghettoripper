@@ -107,25 +107,31 @@ def infer(db_file, username):
     logger.info("Infer finished")
 
 
-def update_files(db_file, track_dir, username):
+def update_files(db_file, filemanager, username):
     logger.info("Updating files")
     database = db.Database(db_file)
     t_uris = database.get_deleted_tracks()
     si = spotify.SpotifyInterface(username)
     for t_uri in t_uris:
-        os.remove(os.path.join(track_dir, t_id(t_uri) + '.mp3'))
+        filemanager.remove_track(t_uri)
     logger.info("Removed %s files", len(t_uris))
     t_infos = database.get_tracks_for_download()
-    t_missing = [(t_uri, t_link) for (t_uri, t_link) in t_infos
-                 if not os.path.exists(os.path.join(track_dir, t_id(t_uri) + '.mp3'))]
     logger.debug("t_infos: %s", t_infos)
-    logger.debug("track_dir: %s", track_dir)
+    t_missing = [(t_uri, t_link) for (t_uri, t_link) in t_infos
+                 if not filemanager.track_exists(t_uri)]
+    if len(t_missing) == 0:
+        logger.info("No tracks missing")
+        return
+    missing_uris = [t_uri for t_uri, _ in t_missing]
+    tracks = si.get_track_info(missing_uris)
+    for i in range(len(tracks)):
+        tracks[i].yt_link = t_infos[i][1]
     logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
-    for t_uri, yt_link in t_missing:
-        path = os.path.join(track_dir, t_id(t_uri))
-        mp3_path = path + ".mp3"
-        youtube.download_video(yt_link, path)
-        si.write_track_info(t_uri, mp3_path)
+    for track in tracks:
+        logger.info("Downloading track %s (%s)", track.uri, track.yt_link)
+        path = filemanager.track_path(track.uri, True)
+        youtube.download_video(track.yt_link, path)
+        filemanager.write_track_info(track)
     logger.info("Files updated")
 
 
@@ -166,6 +172,11 @@ def delete_ignored_tracks(db_file, tracks_dir):
         os.remove(t_p)
     database.close()
     logger.info("Removed tracks.")
+
+def list_ignored(db_file, username):
+    database = db.Database(db_file)
+    t_uris = database.get_ignored_tracks()
+#    for t in t_uris
 
 
 def generate_playlist_files(db_file, tracks_dir, playlist_dir):
@@ -271,6 +282,8 @@ def main():
 
     p_del_ignored = subparsers.add_parser('delignored', help="Remove tracks that are ignored")
 
+    p_list_ignored = subparsers.add_parser('list-ignored', help="List ignored tracks")
+
     p_set_link = subparsers.add_parser('set-link', help="Set the youtube link for a track.  Unsets the ignore flag.")
     p_set_link.add_argument('track_uri', help="The URI of the track")
     p_set_link.add_argument('yt_link', help="The YouTube link")
@@ -287,6 +300,7 @@ def main():
     db_path = conf['dbfile']
     track_dir = conf['tracksdir']
     playlists_dir = conf['listsdir']
+    filemanager = fileio.FileManager(track_dir)
     init(conf)
 
     cmd = args.subcommand
@@ -302,11 +316,11 @@ def main():
     elif cmd == 'infer':
         infer(db_path, username)
     elif cmd == 'update-tracks':
-        update_files(db_path, track_dir, username)
+        update_files(db_path, filemanager, username)
     elif cmd == 'update-lists':
         generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'update':
-        update_files(db_path, track_dir, username)
+        update_files(db_path, filemanager, username)
         generate_playlist_files(db_path, track_dir, playlists_dir)
     elif cmd == 'ignore':
         ignore_tracks(db_path, args.uri)
@@ -314,10 +328,12 @@ def main():
         unignore_tracks(db_path, args.uri)
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
+    elif cmd == 'list-ignored':
+        list_ignored()
     elif cmd == 'set-link':
         set_link(db_path, args.track_uri, args.yt_link)
     elif cmd == 'export':
-        export_list(db_path, fileio.FileManager(track_dir),
+        export_list(db_path, filemanager,
                     args.list_uri, args.out_dir)
 
 
