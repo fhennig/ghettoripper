@@ -46,7 +46,7 @@ class SpotifyInterface:
             for artist in t['album']['artists'][1:]:
                 album_artists += "; " + artist['name']
             tr.album_artist = album_artists
-            tr.track_number = tf['track_number']
+            tr.track_number = t['track_number']
             result.append(tr)
         return result
 
