@@ -26,7 +26,8 @@ def best_hit_for_query(query_str):
 
 def download_video(link, output_path):
     """the link to download and the destination path,
-    without the file extension!"""
+    without the file extension!
+    The extension is added according to the type of audio file."""
     ydl_opts = {'format': 'bestaudio',
                 'outtmpl': output_path + '.%(ext)s',
                 'noplaylist': True,

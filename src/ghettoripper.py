@@ -129,9 +129,10 @@ def update_files(db_file, filemanager, username):
     logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
     for track in tracks:
         logger.info("Downloading track %s (%s)", track.uri, track.yt_link)
-        path = filemanager.track_path(track.uri, True)
-        youtube.download_video(track.yt_link, path)
-        filemanager.write_track_info(track)
+        path_slug = filemanager.create_track_path(track.uri, track.title, True)
+        youtube.download_video(track.yt_link, path_slug)
+        path = filemanager.get_track_path(track.uri)  # get the track_path including extension
+        filemanager.write_track_info(track, path)
     logger.info("Files updated")
 
 
@@ -217,7 +218,7 @@ def export_list(db_file, filemanager, list_uri, out_dir):
                 len(t_uris), list_name, list_dir)
     for t_uri in t_uris:
         if filemanager.track_exists(t_uri):
-            t_path = filemanager.track_path(t_uri)
+            t_path = filemanager.get_track_path(t_uri)
             shutil.copy(t_path, list_dir)
         else:
             logger.info("Track missing: %s", t_uri)
