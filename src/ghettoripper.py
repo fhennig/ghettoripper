@@ -125,7 +125,7 @@ def update_files(db_file, filemanager, username):
     missing_uris = [t_uri for t_uri, _ in t_missing]
     tracks = si.get_track_info(missing_uris)
     for i in range(len(tracks)):
-        tracks[i].yt_link = t_infos[i][1]
+        tracks[i].yt_link = t_missing[i][1]
     logger.info("Found %s/%s tracks missing", len(t_missing), len(t_infos))
     for track in tracks:
         logger.info("Downloading track %s (%s)", track.uri, track.yt_link)
@@ -175,8 +175,11 @@ def delete_ignored_tracks(db_file, tracks_dir):
 
 def list_ignored(db_file, username):
     database = db.Database(db_file)
+    si = spotify.SpotifyInterface(username)
     t_uris = database.get_ignored_tracks()
-#    for t in t_uris
+    t_infos = si.get_track_info(t_uris)
+    for t_info in t_infos:
+        logger.info("%s - %s - %s - %s (%s)", t_info.uri, t_info.title, t_info.artist, t_info.album, t_info.yt_link)
 
 
 def generate_playlist_files(db_file, tracks_dir, playlist_dir):
@@ -329,9 +332,9 @@ def main():
     elif cmd == 'delignored':
         delete_ignored_tracks(db_path, track_dir)
     elif cmd == 'list-ignored':
-        list_ignored()
+        list_ignored(db_path, username)
     elif cmd == 'set-link':
-        set_link(db_path, args.track_uri, args.yt_link)
+        set_link(db_path, filemanager, args.track_uri, args.yt_link)
     elif cmd == 'export':
         export_list(db_path, filemanager,
                     args.list_uri, args.out_dir)

@@ -7,4 +7,6 @@ class Track:
         self.album = ""
         self.album_artist = ""
         self.track_number = -1
+        self.publisher = ""
+        self.date = ""
         self.yt_link = ""

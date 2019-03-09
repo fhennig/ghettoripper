@@ -32,24 +32,27 @@ class SpotifyInterface:
 
     def get_track_info(self, t_uris):
         """reads multiple tracks into track objects"""
-        tracks = self.sp.tracks(t_uris)["tracks"]
         result = []
-        for t in tracks:
-            tr = track.Track(t["uri"])
-            tr.title = t["name"]
-            artists = t['artists'][0]['name']
-            for artist in t['artists'][1:]:
-                artists += "; " + artist['name']
-            tr.artist = artists
-            tr.album = t['album']['name']
-            album_artists = t['album']['artists'][0]['name']
-            for artist in t['album']['artists'][1:]:
-                album_artists += "; " + artist['name']
-            tr.album_artist = album_artists
-            tr.track_number = t['track_number']
-            result.append(tr)
+        while len(t_uris) > 0:
+            tracks = self.sp.tracks(t_uris[:10])["tracks"]
+            t_uris = t_uris[10:]
+            for t in tracks:
+                if t == None:
+                    continue
+                tr = track.Track(t["uri"])
+                tr.title = t["name"]
+                artists = t['artists'][0]['name']
+                for artist in t['artists'][1:]:
+                    artists += "; " + artist['name']
+                tr.artist = artists
+                tr.album = t['album']['name']
+                album_artists = t['album']['artists'][0]['name']
+                for artist in t['album']['artists'][1:]:
+                    album_artists += "; " + artist['name']
+                tr.album_artist = album_artists
+                tr.track_number = t['track_number']
+                result.append(tr)
         return result
-
 
 
 def extract_userid_from_playlist_uri(playlist_uri):
